@@ -1,0 +1,194 @@
+ /*QUIZ STYLE FUNNEL*/
+ /* First, take a look at the first 15 rows of the survey table*/
+ SELECT *
+ FROM survey
+ LIMIT 15;
+
+/*Create a Quiz funnel using GROUP BY function to see the number of responses per question in the survey*/
+SELECT question, CAST(COUNT(DISTINCT user_id) AS REAL) as num_responses
+FROM survey
+GROUP BY question
+ORDER BY question;
+
+/*Calculate the percentage of users who answer each question. Divide the number of people completing each step by the number of people completing the previous question in the survey*/
+
+/*Use WINDOW function and LAG to calculate change in responses between questions*/
+SELECT 
+  question, 
+  CAST(COUNT(DISTINCT user_id) AS REAL) as num_responses,
+  CAST(COUNT(DISTINCT user_id) AS REAL)-LAG(CAST(COUNT(DISTINCT user_id) AS REAL),1,(CAST(COUNT(DISTINCT user_id) AS REAL))) OVER (
+    ORDER BY question
+  ) AS 'change_num_responses_bw_questions'
+FROM survey
+GROUP BY question
+ORDER BY question;
+
+/*calculate percent change now using a WITH clause*/
+WITH percent_change_table AS (
+  SELECT 
+  question, 
+  CAST(COUNT(DISTINCT user_id) AS REAL) as Num_responses,
+  CAST(COUNT(DISTINCT user_id) AS REAL)-LAG(CAST(COUNT(DISTINCT user_id) AS REAL),1,(CAST(COUNT(DISTINCT user_id) AS REAL))) OVER (
+    ORDER BY question
+  ) AS 'Change_num_responses_bw_questions'
+FROM survey
+GROUP BY question
+ORDER BY question
+)
+SELECT
+  question, 
+  num_responses, 
+  Change_num_responses_bw_questions, 
+  100+100*(Change_num_responses_bw_questions/LAG(Num_responses) OVER (ORDER BY question)) AS 'Percent_change_bw_questions',
+  100*(num_responses/500) AS 'Total_responded_per_question'
+FROM percent_change_table;
+/*this concludes the Style Quiz Funnel Analysis portion*/
+
+
+/*HOME TRY-ON FUNNEL*/
+
+/*First examine the first 5 rows per table: quiz, home_try_on, and purchase*/
+SELECT *
+FROM quiz
+LIMIT 5;
+SELECT *
+FROM home_try_on
+LIMIT 5;
+SELECT *
+FROM purchase
+LIMIT 5;
+
+/* Next, create a new table that illustrates Warby Parker's Purchase Funnel using JOIN clause and CASE statement for the 3 tables above. Limit to first 10 rows to save space*/
+SELECT 
+  DISTINCT q.user_id, 
+  CASE
+    WHEN hto.user_id IS NOT NULL THEN True
+    ELSE False
+    END AS 'is_home_try_on',
+  number_of_pairs,
+  CASE 
+    WHEN p.user_id IS NOT NULL Then True
+    ELSE False
+    END AS 'is_purchase'
+FROM quiz as q
+LEFT JOIN home_try_on as hto
+  ON q.user_id = hto.user_id
+LEFT JOIN purchase as p
+  ON hto.user_id = p.user_id
+  LIMIT 10;
+
+/*With the new table above created, Calculate the Overall Conversion Rates for Warby Parker's purchase funnel via a WITH clause*/
+
+/*First, start off the funnel by calculating how many total distinct customers took the style quiz, and sum up the number of customers who proceeded to a home try-on and number of customers who then proceeded to make a purchase*/
+WITH purchase_funnel AS (
+  SELECT 
+  DISTINCT q.user_id, 
+  CASE
+    WHEN hto.user_id IS NOT NULL THEN True
+    ELSE False
+    END AS 'is_home_try_on',
+  number_of_pairs,
+  CASE 
+    WHEN p.user_id IS NOT NULL Then True
+    ELSE False
+    END AS 'is_purchase'
+FROM quiz as q
+LEFT JOIN home_try_on as hto
+  ON q.user_id = hto.user_id
+LEFT JOIN purchase as p
+  ON hto.user_id = p.user_id
+)
+SELECT 
+  COUNT(DISTINCT user_id) AS 'total_num_customers',
+  SUM(is_home_try_on) AS 'num_home_try_on',
+  SUM(is_purchase) AS 'num_purchase_made',
+  100*CAST(SUM(is_home_try_on) AS REAL)/COUNT(DISTINCT user_id) AS 'home_try_on_%',
+  100*CAST(SUM(is_purchase) AS REAL)/COUNT(DISTINCT user_id) AS 'overall_purchase_%'
+FROM purchase_funnel;
+
+/*Now compare the Conversion Rates from quiz → home_try_on and home_try_on → purchase*/
+WITH purchase_funnel AS (
+  SELECT 
+  DISTINCT q.user_id, 
+  CASE
+    WHEN hto.user_id IS NOT NULL THEN True
+    ELSE False
+    END AS 'is_home_try_on',
+  number_of_pairs,
+  CASE 
+    WHEN p.user_id IS NOT NULL Then True
+    ELSE False
+    END AS 'is_purchase'
+FROM quiz as q
+LEFT JOIN home_try_on as hto
+  ON q.user_id = hto.user_id
+LEFT JOIN purchase as p
+  ON hto.user_id = p.user_id
+)
+SELECT 
+  COUNT(DISTINCT user_id) AS 'total_num_customers',
+  SUM(is_home_try_on) AS 'num_home_try_on',
+  SUM(is_purchase) AS 'num_purchase_made',
+  100*CAST(SUM(is_home_try_on) AS REAL)/COUNT(DISTINCT user_id) AS 'home_try_on_%',
+  100*CAST(SUM(is_purchase) AS REAL)/SUM(is_home_try_on) AS 'funnel_purchase_%'
+FROM purchase_funnel;
+
+/*Next, calculate the difference in purchase rates between customers who had 3 pairs vs those with 5 pairs to try at home*/
+WITH purchase_funnel AS (
+  SELECT 
+  DISTINCT q.user_id, 
+  CASE
+    WHEN hto.user_id IS NOT NULL THEN True
+    ELSE False
+    END AS 'is_home_try_on',
+  number_of_pairs,
+  CASE 
+    WHEN p.user_id IS NOT NULL Then True
+    ELSE False
+    END AS 'is_purchase'
+FROM quiz as q
+LEFT JOIN home_try_on as hto
+  ON q.user_id = hto.user_id
+LEFT JOIN purchase as p
+  ON hto.user_id = p.user_id
+)
+SELECT 
+  number_of_pairs,
+  COUNT(DISTINCT user_id) AS 'total_num_customers',
+  SUM(is_home_try_on) AS 'num_home_try_on',
+  SUM(is_purchase) AS 'num_purchase_made',
+  100*CAST(SUM(is_home_try_on) AS REAL)/COUNT(DISTINCT user_id) AS 'home_try_on_%',
+  100*CAST(SUM(is_purchase) AS REAL)/COUNT(DISTINCT user_id) AS 'overall_purchase_%'
+FROM purchase_funnel
+GROUP BY number_of_pairs;
+/* This concludes the Purchase Funnel Analysis. Results show customers who were sent 5 pairs to try at home had an 80% success rate of making a purchase while those customers who were only sent 3 pairs had just a 53% purchase rate*/
+
+/*For the Executive Summary Portion*/
+/*We can calculate what the most common results of the style quiz were*/
+SELECT question, response, COUNT(response)
+FROM survey
+GROUP BY question, response
+ORDER BY question, COUNT(response) DESC;
+
+/*What is the most common types of purchases made?*/
+SELECT style, model_name, COUNT(model_name) as 'quantity_purchased'
+FROM purchase
+GROUP BY model_name
+ORDER BY COUNT(model_name) DESC;
+
+SELECT style, model_name, COUNT(model_name) as 'quantity_purchased', color
+FROM purchase
+GROUP BY model_name, color
+ORDER BY model_name, COUNT(model_name) DESC;
+
+/*What is total revenue of all purchases*/
+SELECT SUM(price) AS 'Total_Revenue'
+FROM purchase;
+/*total sales revenue generated $55,795*/
+
+
+/* Which purchase brings in the most Sale Revenue? Turn the sales revenue into a percentage out of total Sale Revenue generated also*/
+SELECT style, model_name, color, COUNT(model_name) as 'quantity_purchased', price, SUM(price) AS 'revenue', ROUND(100*(CAST(SUM(price) AS REAL))/55795) AS 'percent_revenue'
+FROM purchase
+GROUP BY model_name, color
+ORDER BY percent_revenue DESC;
