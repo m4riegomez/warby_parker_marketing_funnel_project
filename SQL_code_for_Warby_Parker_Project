@@ -18,19 +18,19 @@ SELECT
   CAST(COUNT(DISTINCT user_id) AS REAL) as num_responses,
   CAST(COUNT(DISTINCT user_id) AS REAL)-LAG(CAST(COUNT(DISTINCT user_id) AS REAL),1,(CAST(COUNT(DISTINCT user_id) AS REAL))) OVER (
     ORDER BY question
-  ) AS 'change_num_responses_bw_questions'
+  ) AS 'change_num_responses_bw_Qs'
 FROM survey
 GROUP BY question
 ORDER BY question;
 
-/*calculate percent change now using a WITH clause*/
+/*calculate percent change now using WITH clause*/
 WITH percent_change_table AS (
   SELECT 
   question, 
   CAST(COUNT(DISTINCT user_id) AS REAL) as Num_responses,
   CAST(COUNT(DISTINCT user_id) AS REAL)-LAG(CAST(COUNT(DISTINCT user_id) AS REAL),1,(CAST(COUNT(DISTINCT user_id) AS REAL))) OVER (
     ORDER BY question
-  ) AS 'Change_num_responses_bw_questions'
+  ) AS 'Change_num_responses_bw_Qs'
 FROM survey
 GROUP BY question
 ORDER BY question
@@ -38,9 +38,9 @@ ORDER BY question
 SELECT
   question, 
   num_responses, 
-  Change_num_responses_bw_questions, 
-  100+100*(Change_num_responses_bw_questions/LAG(Num_responses) OVER (ORDER BY question)) AS 'Percent_change_bw_questions',
-  100*(num_responses/500) AS 'Total_responded_per_question'
+  Change_num_responses_bw_Qs, 
+  100+100*(Change_num_responses_bw_Qs/LAG(Num_responses) OVER (ORDER BY question)) AS '%_change_bw_Qs',
+  100*(num_responses/500) AS 'Total_%_responded_per_Q'
 FROM percent_change_table;
 /*this concludes the Style Quiz Funnel Analysis portion*/
 
@@ -170,22 +170,24 @@ FROM survey
 GROUP BY question, response
 ORDER BY question, COUNT(response) DESC;
 
-/*What is the most common types of purchases made?*/
+
+
+/*What is the most popular model purchased?*/
 SELECT style, model_name, COUNT(model_name) as 'quantity_purchased'
 FROM purchase
 GROUP BY model_name
 ORDER BY COUNT(model_name) DESC;
-
+/*What is the most most popular model purchased with color in mind?*/
 SELECT style, model_name, COUNT(model_name) as 'quantity_purchased', color
 FROM purchase
 GROUP BY model_name, color
-ORDER BY model_name, COUNT(model_name) DESC;
+ORDER BY COUNT(model_name) DESC;
+
 
 /*What is total revenue of all purchases*/
 SELECT SUM(price) AS 'Total_Revenue'
 FROM purchase;
 /*total sales revenue generated $55,795*/
-
 
 /* Which purchase brings in the most Sale Revenue? Turn the sales revenue into a percentage out of total Sale Revenue generated also*/
 SELECT style, model_name, color, COUNT(model_name) as 'quantity_purchased', price, SUM(price) AS 'revenue', ROUND(100*(CAST(SUM(price) AS REAL))/55795) AS 'percent_revenue'
